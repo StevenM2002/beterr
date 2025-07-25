@@ -18,16 +18,16 @@ type printOutput struct {
 	Inner  any      `json:"inner"`
 }
 
-// Debug provides debugging functionality with argument tracking.
+// Wrap provides debugging functionality with argument tracking.
 // The A field stores arguments that will be included in error output.
-type Debug struct {
+type Wrap struct {
 	// A holds arguments to be included in debug output
 	A []any
 }
 
 // E formats an error with debugging context including function name, arguments, and message.
 // It wraps the original error with structured debugging information that can be chained.
-func (d *Debug) E(err error, msg ...string) error {
+func (w *Wrap) E(err error, msg ...string) error {
 	m := strings.Join(msg, " ")
 	pc, _, _, ok := runtime.Caller(1)
 	fnName := "unknown"
@@ -52,7 +52,7 @@ func (d *Debug) E(err error, msg ...string) error {
 		o.Inner = prevO
 	}
 
-	for _, c := range d.A {
+	for _, c := range w.A {
 		if _, ok := c.(context.Context); ok {
 			o.Args = append(o.Args, "ctx")
 			continue

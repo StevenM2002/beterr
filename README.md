@@ -4,11 +4,11 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/StevenM2002/beterr)](https://goreportcard.com/report/github.com/StevenM2002/beterr)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A lightweight Go package for structured error handling and debugging with enhanced error formatting, function call context, and argument inspection.
+A lightweight Go package for structured error handling and wrapging with enhanced error formatting, function call context, and argument inspection.
 
 ## Features
 
--  **Structured Error Formatting**: Wrap errors with function context and arguments for better debugging
+-  **Structured Error Formatting**: Wrap errors with function context and arguments for better wrapging
 -  **Automatic Call Stack Information**: Capture function names using runtime reflection
 -  **Argument Inspection**: Include function arguments in error output
 -  **JSON Serialization**: Convert complex data structures to readable JSON format
@@ -33,10 +33,10 @@ import (
 )
 
 func processUser(userID int, name string) error {
-    debug := beterr.Debug{A: []any{userID, name}}
+    wrap := beterr.Wrap{A: []any{userID, name}}
     
     if userID < 0 {
-        return debug.E(fmt.Errorf("invalid user ID"), "failed to process user")
+        return wrap.E(fmt.Errorf("invalid user ID"), "failed to process user")
     }
     
     return nil
@@ -57,10 +57,10 @@ func main() {
 
 ```go
 func validateInput(data string) error {
-    debug := beterr.Debug{A: []any{data}}
+    wrap := beterr.Wrap{A: []any{data}}
     
     if len(data) == 0 {
-        return debug.E(fmt.Errorf("empty input"), "validation failed")
+        return wrap.E(fmt.Errorf("empty input"), "validation failed")
     }
     
     return nil
@@ -78,11 +78,11 @@ type User struct {
 }
 
 func handleRequest(ctx context.Context, user *User) error {
-    debug := beterr.Debug{A: []any{ctx, user}}
+    wrap := beterr.Wrap{A: []any{ctx, user}}
     
     err := validateUser(user)
     if err != nil {
-        return debug.E(err, "request processing failed")
+        return wrap.E(err, "request processing failed")
     }
     
     return nil
@@ -106,21 +106,21 @@ fmt.Println(jsonStr) // {"host":"localhost","port":8080}
 
 ### Types
 
-#### Debug
+#### Wrap
 
 ```go
-type Debug struct {
-    A []any // Arguments to include in debug output
+type Wrap struct {
+    A []any // Arguments to include in wrap output
 }
 ```
 
-The `Debug` struct is the main type for creating structured error contexts. The `A` field holds arguments that will be serialized and included in the error output.
+The `Wrap` struct is the main type for creating structured error contexts. The `A` field holds arguments that will be serialized and included in the error output.
 
 ### Methods
 
 #### E(err error, msg ...string) error
 
-Formats an error with debugging context including:
+Formats an error with wrapging context including:
 - Function name (automatically captured)
 - Arguments from the `A` field
 - Custom message
@@ -130,7 +130,7 @@ Formats an error with debugging context including:
 - `err`: The original error to wrap
 - `msg`: Optional message parts that will be joined with spaces
 
-**Returns:** A new error with structured debugging information
+**Returns:** A new error with structured wrapging information
 
 ### Functions
 
@@ -157,7 +157,7 @@ The package produces structured JSON error output with the following fields:
 ```
 
 - `fn_name`: Fully qualified function name where the error occurred
-- `args`: JSON-serialized arguments passed to the Debug struct
+- `args`: JSON-serialized arguments passed to the Wrap struct
 - `msg`: Custom error message
 - `inner`: The original error or nested error structure
 
@@ -167,13 +167,13 @@ The package supports full error chaining, preserving the complete context chain:
 
 ```go
 func level1() error {
-    debug := beterr.Debug{A: []any{"level1-arg"}}
-    return debug.E(level2(), "level1 failed")
+    wrap := beterr.Wrap{A: []any{"level1-arg"}}
+    return wrap.E(level2(), "level1 failed")
 }
 
 func level2() error {
-    debug := beterr.Debug{A: []any{"level2-arg"}}
-    return debug.E(fmt.Errorf("original error"), "level2 failed")
+    wrap := beterr.Wrap{A: []any{"level2-arg"}}
+    return wrap.E(fmt.Errorf("original error"), "level2 failed")
 }
 ```
 
@@ -185,5 +185,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- Inspired by the need for better error debugging in Go applications
+- Inspired by the need for better error wrapging in Go applications
 - Built with Go's excellent standard library for runtime introspection
