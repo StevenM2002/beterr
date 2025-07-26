@@ -62,6 +62,17 @@ func (w *Wrap) E(err error, msg ...string) error {
 	return fmt.Errorf("%s", StructString(o))
 }
 
+// W creates a new Wrap instance with the provided arguments.
+// This is a convenience function that internally calls Wrap{A: []any{...}}.
+// It accepts any number of arguments which will be included in error output for debugging.
+//
+// Example usage:
+//   w := W(userID, requestData, config)
+//   return w.E(err, "failed to process request")
+func W(args ...any) *Wrap {
+	return &Wrap{A: args}
+}
+
 // StructString converts any value to a JSON string representation.
 // If JSON marshaling fails, it falls back to the default string format.
 func StructString(v any) string {

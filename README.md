@@ -33,10 +33,10 @@ import (
 )
 
 func processUser(userID int, name string) error {
-    wrap := beterr.Wrap{A: []any{userID, name}}
+    w := beterr.W(userID, name)
     
     if userID < 0 {
-        return wrap.E(fmt.Errorf("invalid user ID"), "failed to process user")
+        return w.E(fmt.Errorf("invalid user ID"), "failed to process user")
     }
     
     return nil
@@ -57,10 +57,10 @@ func main() {
 
 ```go
 func validateInput(data string) error {
-    wrap := beterr.Wrap{A: []any{data}}
+    w := beterr.W(data)
     
     if len(data) == 0 {
-        return wrap.E(fmt.Errorf("empty input"), "validation failed")
+        return w.E(fmt.Errorf("empty input"), "validation failed")
     }
     
     return nil
@@ -78,11 +78,11 @@ type User struct {
 }
 
 func handleRequest(ctx context.Context, user *User) error {
-    wrap := beterr.Wrap{A: []any{ctx, user}}
+    w := beterr.W(ctx, user)
     
     err := validateUser(user)
     if err != nil {
-        return wrap.E(err, "request processing failed")
+        return w.E(err, "request processing failed")
     }
     
     return nil
@@ -134,6 +134,21 @@ Formats an error with wrapging context including:
 
 ### Functions
 
+#### W(args ...any) *Wrap
+
+A convenience function that creates a new `Wrap` instance with the provided arguments. This is equivalent to `&Wrap{A: []any{...}}` but more concise.
+
+**Parameters:**
+- `args`: Variadic arguments to include in the wrap context
+
+**Returns:** A pointer to a new `Wrap` instance
+
+**Example:**
+```go
+w := beterr.W(userID, requestData, config)
+return w.E(err, "failed to process request")
+```
+
 #### StructString(v any) string
 
 Converts any value to a JSON string representation. If JSON marshaling fails, it falls back to Go's default string formatting.
@@ -167,13 +182,13 @@ The package supports full error chaining, preserving the complete context chain:
 
 ```go
 func level1() error {
-    wrap := beterr.Wrap{A: []any{"level1-arg"}}
-    return wrap.E(level2(), "level1 failed")
+    w := beterr.W("level1-arg")
+    return w.E(level2(), "level1 failed")
 }
 
 func level2() error {
-    wrap := beterr.Wrap{A: []any{"level2-arg"}}
-    return wrap.E(fmt.Errorf("original error"), "level2 failed")
+    w := beterr.W("level2-arg")
+    return w.E(fmt.Errorf("original error"), "level2 failed")
 }
 ```
 
