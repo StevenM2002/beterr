@@ -4,11 +4,11 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/StevenM2002/beterr)](https://goreportcard.com/report/github.com/StevenM2002/beterr)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A lightweight Go package for structured error handling and wrapging with enhanced error formatting, function call context, and argument inspection.
+A lightweight Go package for structured error handling and wrapping with enhanced error formatting, function call context, and argument inspection.
 
 ## Features
 
--  **Structured Error Formatting**: Wrap errors with function context and arguments for better wrapging
+-  **Structured Error Formatting**: Wrap errors with function context and arguments for better debugging
 -  **Automatic Call Stack Information**: Capture function names using runtime reflection
 -  **Argument Inspection**: Include function arguments in error output
 -  **JSON Serialization**: Convert complex data structures to readable JSON format
@@ -120,7 +120,7 @@ The `Wrap` struct is the main type for creating structured error contexts. The `
 
 #### E(err error, msg ...string) error
 
-Formats an error with wrapging context including:
+Formats an error with wrapping context including:
 - Function name (automatically captured)
 - Arguments from the `A` field
 - Custom message
@@ -130,7 +130,7 @@ Formats an error with wrapging context including:
 - `err`: The original error to wrap
 - `msg`: Optional message parts that will be joined with spaces
 
-**Returns:** A new error with structured wrapging information
+**Returns:** A new error with structured wrapping information
 
 ### Functions
 
@@ -165,16 +165,16 @@ The package produces structured JSON error output with the following fields:
 ```json
 {
   "fn_name": "main.processUser",
-  "args": ["-1", "\"John\""],
-  "msg": "failed to process user", 
+  "args": [-1, "John"],
+  "msg": "failed to process user",
   "inner": "invalid user ID"
 }
 ```
 
 - `fn_name`: Fully qualified function name where the error occurred
-- `args`: JSON-serialized arguments passed to the Wrap struct
+- `args`: Arguments passed to the Wrap struct, preserved at their native JSON types
 - `msg`: Custom error message
-- `inner`: The original error or nested error structure
+- `inner`: The original error string, or a nested error object for chained wraps
 
 ## Error Chaining
 
@@ -200,5 +200,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- Inspired by the need for better error wrapging in Go applications
+- Inspired by the need for better error wrapping in Go applications
 - Built with Go's excellent standard library for runtime introspection

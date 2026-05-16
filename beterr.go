@@ -12,10 +12,10 @@ import (
 
 // printOutput represents the structured output format for debug information.
 type printOutput struct {
-	FnName string   `json:"fn_name"`
-	Args   []string `json:"args"`
-	Msg    string   `json:"msg"`
-	Inner  any      `json:"inner"`
+	FnName string            `json:"fn_name"`
+	Args   []json.RawMessage `json:"args"`
+	Msg    string            `json:"msg"`
+	Inner  any               `json:"inner"`
 }
 
 // Wrap provides debugging functionality with argument tracking.
@@ -40,24 +40,28 @@ func (w *Wrap) E(err error, msg ...string) error {
 	}
 	o := printOutput{
 		FnName: fnName,
-		Args:   []string{},
+		Args:   []json.RawMessage{},
 		Msg:    m,
 		Inner:  errStr,
 	}
 
-	// See if we can unmarshal inner into PrintOutput
-	var prevO printOutput
-	myErr := json.Unmarshal([]byte(err.Error()), &prevO)
-	if myErr == nil {
-		o.Inner = prevO
+	if err != nil {
+		var prevO printOutput
+		if json.Unmarshal([]byte(errStr), &prevO) == nil {
+			o.Inner = prevO
+		}
 	}
 
 	for _, c := range w.A {
 		if _, ok := c.(context.Context); ok {
-			o.Args = append(o.Args, "ctx")
+			o.Args = append(o.Args, json.RawMessage(`"ctx"`))
 			continue
 		}
-		o.Args = append(o.Args, StructString(c))
+		b, jerr := json.Marshal(c)
+		if jerr != nil {
+			b, _ = json.Marshal(fmt.Sprintf("%+v", c))
+		}
+		o.Args = append(o.Args, b)
 	}
 	return fmt.Errorf("%s", StructString(o))
 }
