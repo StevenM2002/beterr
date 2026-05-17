@@ -3,6 +3,7 @@ package beterr
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -271,3 +272,50 @@ func TestErrorImplementsErrorInterface(t *testing.T) {
 		t.Fatal("E result should not be nil when assigned to error interface")
 	}
 }
+
+func TestErrorsIsTraversesSingleBeterrWrap(t *testing.T) {
+	sentinel := errors.New("the sentinel")
+	wrapped := W("arg").E(sentinel, "context")
+
+	if !errors.Is(wrapped, sentinel) {
+		t.Errorf("errors.Is should find sentinel through a single beterr wrap")
+	}
+}
+
+func TestErrorsIsTraversesNestedBeterrWraps(t *testing.T) {
+	sentinel := errors.New("the sentinel")
+	layer1 := W().E(sentinel, "layer 1")
+	layer2 := W().E(layer1, "layer 2")
+	layer3 := W().E(layer2, "layer 3")
+
+	if !errors.Is(layer3, sentinel) {
+		t.Errorf("errors.Is should find sentinel through three beterr wraps")
+	}
+}
+
+func TestErrorsIsTraversesMixedFmtAndBeterrChain(t *testing.T) {
+	sentinel := errors.New("the sentinel")
+	fmtWrapped := fmt.Errorf("%w: with context", sentinel)
+	beterrWrapped := W("arg").E(fmtWrapped, "outer")
+
+	if !errors.Is(beterrWrapped, sentinel) {
+		t.Errorf("errors.Is should traverse beterr -> fmt.Errorf(%%w) -> sentinel")
+	}
+}
+
+func TestErrorsAsRetrievesUnderlyingTypedError(t *testing.T) {
+	wantErr := &typedTestErr{msg: "hello"}
+	wrapped := W().E(wantErr, "outer")
+
+	var got *typedTestErr
+	if !errors.As(wrapped, &got) {
+		t.Fatal("errors.As should retrieve underlying *typedTestErr through beterr wrap")
+	}
+	if got != wantErr {
+		t.Errorf("errors.As recovered = %v, want %v", got, wantErr)
+	}
+}
+
+type typedTestErr struct{ msg string }
+
+func (e *typedTestErr) Error() string { return e.msg }

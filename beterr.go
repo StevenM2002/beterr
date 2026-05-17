@@ -55,6 +55,14 @@ func (e *Error) Top() error {
 	return e.inner
 }
 
+// Unwrap returns the underlying error so errors.Is and errors.As traverse
+// beterr wraps the same way they traverse fmt.Errorf("%w", ...) wraps.
+// Sentinel checks against the original error continue to work after any
+// number of beterr layers have been added.
+func (e *Error) Unwrap() error {
+	return e.inner
+}
+
 // E formats an error with debugging context including function name, arguments, and message.
 // It wraps the original error with structured debugging information that can be chained.
 // The returned *Error implements the error interface and exposes Top to peel
