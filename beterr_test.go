@@ -203,3 +203,75 @@ func TestStructString_FallbackOnUnmarshalable(t *testing.T) {
 		t.Error("expected non-empty fallback string")
 	}
 }
+
+func TestTop_NilErr(t *testing.T) {
+	if got := Top(nil); got != nil {
+		t.Errorf("Top(nil) = %v, want nil", got)
+	}
+}
+
+func TestTop_NonBeterrErrorReturnedUnchanged(t *testing.T) {
+	plain := fmt.Errorf("plain old error")
+	got := Top(plain)
+	if got != plain {
+		t.Errorf("Top(plain) = %v, want the same error instance", got)
+	}
+}
+
+func TestTop_SingleWrapReturnsTopMsg(t *testing.T) {
+	err := W("arg1", 42).E(fmt.Errorf("root cause"), "user-friendly message")
+	top := Top(err)
+	if top == nil {
+		t.Fatal("Top returned nil")
+	}
+	if top.Error() != "user-friendly message" {
+		t.Errorf("Top = %q, want %q", top.Error(), "user-friendly message")
+	}
+	if strings.Contains(top.Error(), "TestTop") {
+		t.Errorf("Top should not leak fn_name: %q", top.Error())
+	}
+	if strings.Contains(top.Error(), "root cause") {
+		t.Errorf("Top should not leak nested chain: %q", top.Error())
+	}
+	if strings.Contains(top.Error(), "arg1") {
+		t.Errorf("Top should not leak args: %q", top.Error())
+	}
+}
+
+func TestTop_NestedWrapsReturnsTopmostMsg(t *testing.T) {
+	inner := W("inner-arg").E(fmt.Errorf("root cause"), "inner failed")
+	middle := W("middle-arg").E(inner, "middle failed")
+	outer := W("outer-arg").E(middle, "outer failed")
+
+	top := Top(outer)
+	if top.Error() != "outer failed" {
+		t.Errorf("Top = %q, want %q", top.Error(), "outer failed")
+	}
+}
+
+func TestTop_EmptyTopMsgFallsBackToInnerString(t *testing.T) {
+	err := W().E(fmt.Errorf("root cause"))
+	top := Top(err)
+	if top.Error() != "root cause" {
+		t.Errorf("Top = %q, want %q", top.Error(), "root cause")
+	}
+}
+
+func TestTop_EmptyMsgsThroughChainFallsBackToDeepestRoot(t *testing.T) {
+	inner := W().E(fmt.Errorf("root cause"))
+	middle := W().E(inner)
+	outer := W().E(middle)
+
+	top := Top(outer)
+	if top.Error() != "root cause" {
+		t.Errorf("Top = %q, want %q", top.Error(), "root cause")
+	}
+}
+
+func TestTop_NilInnerWithNoMsgReturnsOriginal(t *testing.T) {
+	err := W().E(nil)
+	top := Top(err)
+	if top != err {
+		t.Errorf("Top = %v, want original err %v", top, err)
+	}
+}

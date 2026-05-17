@@ -5,6 +5,7 @@ package beterr
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -85,4 +86,41 @@ func StructString(v any) string {
 		return fmt.Sprintf("%+v", v) // Fallback to default string representation
 	}
 	return string(s)
+}
+
+// Top returns the topmost wrap's message as a fresh error, stripped of the
+// function name, arguments, and nested error chain underneath it.
+//
+// Use Top when forwarding an error to a caller who shouldn't see internal
+// debugging context — for example, when returning errors from an RPC handler:
+//
+//	log.Println(err)                                // full beterr chain for ops
+//	return connect.NewError(code, beterr.Top(err))  // surface message only
+//
+// If err is nil, Top returns nil. If err is not a beterr-wrapped error, Top
+// returns err unchanged. If the topmost wrap has an empty message, Top falls
+// back to the deepest root error string in the chain.
+func Top(err error) error {
+	if err == nil {
+		return nil
+	}
+	var o printOutput
+	if json.Unmarshal([]byte(err.Error()), &o) != nil {
+		return err
+	}
+	if o.Msg != "" {
+		return errors.New(o.Msg)
+	}
+	inner := o.Inner
+	for {
+		nested, ok := inner.(map[string]any)
+		if !ok {
+			break
+		}
+		inner = nested["inner"]
+	}
+	if s, ok := inner.(string); ok && s != "" && s != "nil err" {
+		return errors.New(s)
+	}
+	return err
 }
