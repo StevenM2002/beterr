@@ -5,7 +5,6 @@ package beterr
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -26,9 +25,41 @@ type Wrap struct {
 	A []any
 }
 
+// Error is the error returned by Wrap.E. It carries the original underlying
+// error alongside a JSON-serialised description of the wrap (function name,
+// arguments, message, and any nested chain).
+type Error struct {
+	inner error
+	json  string
+}
+
+// Error returns the JSON-serialised wrap including any nested chain.
+func (e *Error) Error() string {
+	return e.json
+}
+
+// Top returns the error that was passed to E to produce this wrap.
+// It peels off the current beterr layer, returning the underlying error
+// exactly as it was given. If the underlying error is itself a beterr wrap,
+// call Top again to peel the next layer. If the wrap was created over a
+// nil error, Top returns nil.
+//
+// Use Top when forwarding an error to a caller who shouldn't see the
+// structured debug JSON the wrap adds — for example, returning errors from
+// an RPC handler:
+//
+//	wrapped := beterr.W(userID).E(err, "failed to process request")
+//	log.Println(wrapped)                            // full debug JSON
+//	return connect.NewError(code, wrapped.Top())    // underlying err only
+func (e *Error) Top() error {
+	return e.inner
+}
+
 // E formats an error with debugging context including function name, arguments, and message.
 // It wraps the original error with structured debugging information that can be chained.
-func (w *Wrap) E(err error, msg ...string) error {
+// The returned *Error implements the error interface and exposes Top to peel
+// the wrap and recover the underlying error.
+func (w *Wrap) E(err error, msg ...string) *Error {
 	m := strings.Join(msg, " ")
 	pc, _, _, ok := runtime.Caller(1)
 	fnName := "unknown"
@@ -64,7 +95,10 @@ func (w *Wrap) E(err error, msg ...string) error {
 		}
 		o.Args = append(o.Args, b)
 	}
-	return fmt.Errorf("%s", StructString(o))
+	return &Error{
+		inner: err,
+		json:  StructString(o),
+	}
 }
 
 // W creates a new Wrap instance with the provided arguments.
@@ -86,41 +120,4 @@ func StructString(v any) string {
 		return fmt.Sprintf("%+v", v) // Fallback to default string representation
 	}
 	return string(s)
-}
-
-// Top returns the topmost wrap's message as a fresh error, stripped of the
-// function name, arguments, and nested error chain underneath it.
-//
-// Use Top when forwarding an error to a caller who shouldn't see internal
-// debugging context — for example, when returning errors from an RPC handler:
-//
-//	log.Println(err)                                // full beterr chain for ops
-//	return connect.NewError(code, beterr.Top(err))  // surface message only
-//
-// If err is nil, Top returns nil. If err is not a beterr-wrapped error, Top
-// returns err unchanged. If the topmost wrap has an empty message, Top falls
-// back to the deepest root error string in the chain.
-func Top(err error) error {
-	if err == nil {
-		return nil
-	}
-	var o printOutput
-	if json.Unmarshal([]byte(err.Error()), &o) != nil {
-		return err
-	}
-	if o.Msg != "" {
-		return errors.New(o.Msg)
-	}
-	inner := o.Inner
-	for {
-		nested, ok := inner.(map[string]any)
-		if !ok {
-			break
-		}
-		inner = nested["inner"]
-	}
-	if s, ok := inner.(string); ok && s != "" && s != "nil err" {
-		return errors.New(s)
-	}
-	return err
 }

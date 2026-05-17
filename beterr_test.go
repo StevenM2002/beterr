@@ -204,74 +204,70 @@ func TestStructString_FallbackOnUnmarshalable(t *testing.T) {
 	}
 }
 
-func TestTop_NilErr(t *testing.T) {
-	if got := Top(nil); got != nil {
-		t.Errorf("Top(nil) = %v, want nil", got)
+func TestTop_ReturnsErrorPassedToE(t *testing.T) {
+	original := fmt.Errorf("root cause")
+	wrapped := W("arg1", 42).E(original, "user-friendly message")
+
+	top := wrapped.Top()
+	if top != original {
+		t.Errorf("Top = %v, want the same error instance passed to E", top)
 	}
 }
 
-func TestTop_NonBeterrErrorReturnedUnchanged(t *testing.T) {
-	plain := fmt.Errorf("plain old error")
-	got := Top(plain)
-	if got != plain {
-		t.Errorf("Top(plain) = %v, want the same error instance", got)
+func TestTop_ReturnsNilWhenEWrappedNil(t *testing.T) {
+	wrapped := W().E(nil, "no underlying err")
+	if top := wrapped.Top(); top != nil {
+		t.Errorf("Top = %v, want nil", top)
 	}
 }
 
-func TestTop_SingleWrapReturnsTopMsg(t *testing.T) {
-	err := W("arg1", 42).E(fmt.Errorf("root cause"), "user-friendly message")
-	top := Top(err)
-	if top == nil {
-		t.Fatal("Top returned nil")
+func TestTop_PeelsOneLayerAtATime(t *testing.T) {
+	root := fmt.Errorf("root cause")
+	layer1 := W("layer1-arg").E(root, "layer1 failed")
+	layer2 := W("layer2-arg").E(layer1, "layer2 failed")
+	layer3 := W("layer3-arg").E(layer2, "layer3 failed")
+
+	if got := layer3.Top(); got != error(layer2) {
+		t.Errorf("layer3.Top() = %v, want layer2 wrap", got)
 	}
-	if top.Error() != "user-friendly message" {
-		t.Errorf("Top = %q, want %q", top.Error(), "user-friendly message")
+
+	peeledOnce, ok := layer3.Top().(*Error)
+	if !ok {
+		t.Fatalf("expected layer3.Top() to be *Error, got %T", layer3.Top())
 	}
-	if strings.Contains(top.Error(), "TestTop") {
+	if got := peeledOnce.Top(); got != error(layer1) {
+		t.Errorf("layer3.Top().Top() = %v, want layer1 wrap", got)
+	}
+
+	peeledTwice, ok := peeledOnce.Top().(*Error)
+	if !ok {
+		t.Fatalf("expected layer1 wrap to be *Error, got %T", peeledOnce.Top())
+	}
+	if got := peeledTwice.Top(); got != root {
+		t.Errorf("peeling to bottom = %v, want root cause %v", got, root)
+	}
+}
+
+func TestTop_DoesNotLeakWrapJSON(t *testing.T) {
+	original := fmt.Errorf("plain message")
+	wrapped := W("secret-arg").E(original, "top msg")
+
+	top := wrapped.Top()
+	if strings.Contains(top.Error(), "secret-arg") {
+		t.Errorf("Top should not leak wrap args: %q", top.Error())
+	}
+	if strings.Contains(top.Error(), "top msg") {
+		t.Errorf("Top should not leak wrap msg: %q", top.Error())
+	}
+	if strings.Contains(top.Error(), "fn_name") {
 		t.Errorf("Top should not leak fn_name: %q", top.Error())
 	}
-	if strings.Contains(top.Error(), "root cause") {
-		t.Errorf("Top should not leak nested chain: %q", top.Error())
-	}
-	if strings.Contains(top.Error(), "arg1") {
-		t.Errorf("Top should not leak args: %q", top.Error())
-	}
 }
 
-func TestTop_NestedWrapsReturnsTopmostMsg(t *testing.T) {
-	inner := W("inner-arg").E(fmt.Errorf("root cause"), "inner failed")
-	middle := W("middle-arg").E(inner, "middle failed")
-	outer := W("outer-arg").E(middle, "outer failed")
-
-	top := Top(outer)
-	if top.Error() != "outer failed" {
-		t.Errorf("Top = %q, want %q", top.Error(), "outer failed")
-	}
-}
-
-func TestTop_EmptyTopMsgFallsBackToInnerString(t *testing.T) {
-	err := W().E(fmt.Errorf("root cause"))
-	top := Top(err)
-	if top.Error() != "root cause" {
-		t.Errorf("Top = %q, want %q", top.Error(), "root cause")
-	}
-}
-
-func TestTop_EmptyMsgsThroughChainFallsBackToDeepestRoot(t *testing.T) {
-	inner := W().E(fmt.Errorf("root cause"))
-	middle := W().E(inner)
-	outer := W().E(middle)
-
-	top := Top(outer)
-	if top.Error() != "root cause" {
-		t.Errorf("Top = %q, want %q", top.Error(), "root cause")
-	}
-}
-
-func TestTop_NilInnerWithNoMsgReturnsOriginal(t *testing.T) {
-	err := W().E(nil)
-	top := Top(err)
-	if top != err {
-		t.Errorf("Top = %v, want original err %v", top, err)
+func TestErrorImplementsErrorInterface(t *testing.T) {
+	var _ error = (*Error)(nil)
+	var err error = W().E(fmt.Errorf("x"), "msg")
+	if err == nil {
+		t.Fatal("E result should not be nil when assigned to error interface")
 	}
 }
