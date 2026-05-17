@@ -222,30 +222,59 @@ func TestTop_ReturnsNilWhenEWrappedNil(t *testing.T) {
 	}
 }
 
-func TestTop_PeelsOneLayerAtATime(t *testing.T) {
+func TestTop_StripsDeeperBeterrChainFromImmediatePrevious(t *testing.T) {
 	root := fmt.Errorf("root cause")
-	layer1 := W("layer1-arg").E(root, "layer1 failed")
-	layer2 := W("layer2-arg").E(layer1, "layer2 failed")
-	layer3 := W("layer3-arg").E(layer2, "layer3 failed")
+	inner := W("inner-arg").E(root, "inner msg")
+	outer := W("outer-arg").E(inner, "outer msg")
 
-	if got := layer3.Top(); got != error(layer2) {
-		t.Errorf("layer3.Top() = %v, want layer2 wrap", got)
-	}
-
-	peeledOnce, ok := layer3.Top().(*Error)
-	if !ok {
-		t.Fatalf("expected layer3.Top() to be *Error, got %T", layer3.Top())
-	}
-	if got := peeledOnce.Top(); got != error(layer1) {
-		t.Errorf("layer3.Top().Top() = %v, want layer1 wrap", got)
+	top := outer.Top()
+	if top == nil {
+		t.Fatal("Top returned nil")
 	}
 
-	peeledTwice, ok := peeledOnce.Top().(*Error)
-	if !ok {
-		t.Fatalf("expected layer1 wrap to be *Error, got %T", peeledOnce.Top())
+	if strings.Contains(top.Error(), "root cause") {
+		t.Errorf("Top should not leak deeper chain (root cause), got: %s", top.Error())
 	}
-	if got := peeledTwice.Top(); got != root {
-		t.Errorf("peeling to bottom = %v, want root cause %v", got, root)
+	if strings.Contains(top.Error(), "outer msg") {
+		t.Errorf("Top should not include this layer's own msg, got: %s", top.Error())
+	}
+	if !strings.Contains(top.Error(), "inner msg") {
+		t.Errorf("Top should include immediate previous msg, got: %s", top.Error())
+	}
+
+	var o printOutput
+	if err := json.Unmarshal([]byte(top.Error()), &o); err != nil {
+		t.Fatalf("Top output is not JSON: %v\noutput: %s", err, top.Error())
+	}
+	if o.Msg != "inner msg" {
+		t.Errorf("Top out.Msg = %q, want %q", o.Msg, "inner msg")
+	}
+	if o.Inner != nil {
+		t.Errorf("Top out.Inner should be nil to indicate stripped chain, got: %v", o.Inner)
+	}
+	if !strings.Contains(o.FnName, "TestTop_StripsDeeperBeterrChain") {
+		t.Errorf("Top out.FnName should be the immediate previous fn, got %q", o.FnName)
+	}
+}
+
+func TestTop_ChainOfThreeWrapsExposesOnlyMiddle(t *testing.T) {
+	root := fmt.Errorf("root cause")
+	layer1 := W().E(root, "layer1 msg")
+	layer2 := W().E(layer1, "layer2 msg")
+	layer3 := W().E(layer2, "layer3 msg")
+
+	top := layer3.Top()
+	if strings.Contains(top.Error(), "layer3 msg") {
+		t.Errorf("Top should not contain this layer's own msg, got: %s", top.Error())
+	}
+	if !strings.Contains(top.Error(), "layer2 msg") {
+		t.Errorf("Top should contain immediate previous (layer2) msg, got: %s", top.Error())
+	}
+	if strings.Contains(top.Error(), "layer1 msg") {
+		t.Errorf("Top should not contain deeper layer1 msg, got: %s", top.Error())
+	}
+	if strings.Contains(top.Error(), "root cause") {
+		t.Errorf("Top should not contain root cause, got: %s", top.Error())
 	}
 }
 

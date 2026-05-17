@@ -27,32 +27,18 @@ type Wrap struct {
 
 // Error is the error returned by Wrap.E. It carries the original underlying
 // error alongside a JSON-serialised description of the wrap (function name,
-// arguments, message, and any nested chain).
+// arguments, message, and any nested chain), plus a pre-built shallow view
+// of the immediate previous error for Top to return.
 type Error struct {
-	inner error
-	json  string
+	inner error       // full underlying err, returned by Unwrap so errors.Is/As traverse
+	out   printOutput // this layer's own structured data (with recursively expanded Inner)
+	top   error       // shallow rendition of inner: just the immediate previous, no further beterr chain
+	json  string      // cached StructString(out)
 }
 
 // Error returns the JSON-serialised wrap including any nested chain.
 func (e *Error) Error() string {
 	return e.json
-}
-
-// Top returns the error that was passed to E to produce this wrap.
-// It peels off the current beterr layer, returning the underlying error
-// exactly as it was given. If the underlying error is itself a beterr wrap,
-// call Top again to peel the next layer. If the wrap was created over a
-// nil error, Top returns nil.
-//
-// Use Top when forwarding an error to a caller who shouldn't see the
-// structured debug JSON the wrap adds — for example, returning errors from
-// an RPC handler:
-//
-//	wrapped := beterr.W(userID).E(err, "failed to process request")
-//	log.Println(wrapped)                            // full debug JSON
-//	return connect.NewError(code, wrapped.Top())    // underlying err only
-func (e *Error) Top() error {
-	return e.inner
 }
 
 // Unwrap returns the underlying error so errors.Is and errors.As traverse
@@ -63,10 +49,28 @@ func (e *Error) Unwrap() error {
 	return e.inner
 }
 
+// Top returns the immediate previous error this wrap was applied to, with
+// any further beterr chain stripped. If the wrapped error was itself a
+// beterr Error, Top returns a shallow rendition of it — that layer's own
+// fn_name, args, and msg, with its inner set to null. If the wrapped error
+// was a plain error, Top returns it as-is. If the wrap was created over a
+// nil error, Top returns nil.
+//
+// Use Top when forwarding an error to a caller who shouldn't see the full
+// nested error stack — for example, returning errors from an RPC handler:
+//
+//	wrapped := beterr.W(userID).E(err, "failed to process request")
+//	log.Println(wrapped)                            // full nested debug JSON
+//	return connect.NewError(code, wrapped.Top())    // only the last error
+func (e *Error) Top() error {
+	return e.top
+}
+
 // E formats an error with debugging context including function name, arguments, and message.
 // It wraps the original error with structured debugging information that can be chained.
-// The returned *Error implements the error interface and exposes Top to peel
-// the wrap and recover the underlying error.
+// The returned *Error implements the error interface, exposes Unwrap so
+// errors.Is/As traverse the chain, and exposes Top to release only the
+// immediate previous error without leaking the deeper stack.
 func (w *Wrap) E(err error, msg ...string) *Error {
 	m := strings.Join(msg, " ")
 	pc, _, _, ok := runtime.Caller(1)
@@ -103,8 +107,27 @@ func (w *Wrap) E(err error, msg ...string) *Error {
 		}
 		o.Args = append(o.Args, b)
 	}
+
+	var topErr error
+	if be, ok := err.(*Error); ok {
+		shallowOut := printOutput{
+			FnName: be.out.FnName,
+			Args:   be.out.Args,
+			Msg:    be.out.Msg,
+			Inner:  nil,
+		}
+		topErr = &Error{
+			out:  shallowOut,
+			json: StructString(shallowOut),
+		}
+	} else if err != nil {
+		topErr = err
+	}
+
 	return &Error{
 		inner: err,
+		out:   o,
+		top:   topErr,
 		json:  StructString(o),
 	}
 }
